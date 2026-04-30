@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { simulateBattle } from "../lib/battleEngine";
 import { getMoveById, getUnlockedSlugs, MOVE_CATALOG } from "../lib/moves";
 import { getFighterByDiscordId } from "../lib/supabase";
+import { calculatePowerLevel } from "../lib/stats";
 import type { DojoCommand, Fighter } from "../types";
 
 const DEFAULT_ITERATIONS = 100;
@@ -16,7 +17,7 @@ function randomAround(base: number, spread: number, min = 40, max = 100): number
 
 function buildCpuFighter(host: Fighter): Fighter {
   const now = new Date().toISOString();
-  return {
+  const cpu: Fighter = {
     ...host,
     id: -1,
     discord_user_id: "cpu_sim_dummy",
@@ -27,25 +28,35 @@ function buildCpuFighter(host: Fighter): Fighter {
     spirit: randomAround(host.spirit, 8),
     chakra: randomAround(host.chakra, 8),
     luck: randomAround(host.luck, 8),
-    wins: 0,
-    losses: 0,
+    // Keep records aligned with host so sim doesn't inject hidden PL bias.
+    wins: host.wins,
+    losses: host.losses,
     created_at: now,
     updated_at: now,
+  };
+  return {
+    ...cpu,
+    power_level: calculatePowerLevel(cpu),
   };
 }
 
 /** Same stats as host — isolates RNG, quotes, counters, and move bonuses (balance curve check). */
 function buildMirrorCpu(host: Fighter): Fighter {
   const now = new Date().toISOString();
-  return {
+  const cpu: Fighter = {
     ...host,
     id: -1,
     discord_user_id: "cpu_sim_dummy",
     username: "Dojo CPU (mirror)",
-    wins: 0,
-    losses: 0,
+    // Mirror mode should be truly symmetric, including record-based PL inputs.
+    wins: host.wins,
+    losses: host.losses,
     created_at: now,
     updated_at: now,
+  };
+  return {
+    ...cpu,
+    power_level: calculatePowerLevel(cpu),
   };
 }
 
@@ -105,6 +116,10 @@ const command: DojoCommand = {
         await edit("You are not registered. Use `/dojo-register` first.");
         return;
       }
+      const simHost: Fighter = {
+        ...fighter,
+        power_level: calculatePowerLevel(fighter),
+      };
 
       const iterations = interaction.options.getInteger("iterations") ?? DEFAULT_ITERATIONS;
       const moveAInput = normalizeMoveId(interaction.options.getString("move_a"));
@@ -129,12 +144,12 @@ const command: DojoCommand = {
         let avgDelta = 0;
 
         for (let i = 0; i < iterations; i += 1) {
-          const cpu = makeCpu(fighter);
-          const result = simulateBattle(fighter, cpu, {
+          const cpu = makeCpu(simHost);
+          const result = simulateBattle(simHost, cpu, {
             moveAId: moveA.id,
             moveBId: moveB.id,
           });
-          if (result.winner.discord_user_id === fighter.discord_user_id) {
+          if (result.winner.discord_user_id === simHost.discord_user_id) {
             wins += 1;
           }
           avgDelta += result.fighterA_score - result.fighterB_score;
@@ -181,12 +196,12 @@ const command: DojoCommand = {
         let wins = 0;
         let edgeSum = 0;
         for (let i = 0; i < runsPerPair; i += 1) {
-          const cpu = makeCpu(fighter);
-          const result = simulateBattle(fighter, cpu, {
+          const cpu = makeCpu(simHost);
+          const result = simulateBattle(simHost, cpu, {
             moveAId: pair.a,
             moveBId: pair.b,
           });
-          if (result.winner.discord_user_id === fighter.discord_user_id) {
+          if (result.winner.discord_user_id === simHost.discord_user_id) {
             wins += 1;
           }
           edgeSum += result.fighterA_score - result.fighterB_score;

@@ -20,8 +20,8 @@ const BATTLE_QUOTES: readonly string[] = [
   "Respect your rival, then surpass them.",
 ];
 
-/** Symmetric narrative swing; kept modest so stats + reads stay primary. */
-const MAX_QUOTE_EDGE = 1.5;
+/** Symmetric narrative swing; tuned down so matchup + stats drive closer fights. */
+const MAX_QUOTE_EDGE = 1.0;
 
 function randomInt(maxExclusive: number): number {
   return Math.floor(Math.random() * maxExclusive);

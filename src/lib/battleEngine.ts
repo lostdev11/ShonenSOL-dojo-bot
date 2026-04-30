@@ -1,4 +1,3 @@
-import { calculatePowerLevel } from "./stats";
 import { getMoveById, type MoveDefinition } from "./moves";
 import { generateQuoteMomentum } from "./battleQuotes";
 import type { DojoSeason, Fighter } from "../types";
@@ -29,18 +28,19 @@ const DEFAULT_WEIGHTS: BattleWeights = {
 const UNDERDOG_THRESHOLD_RATIO = 0.9;
 const AWAKENING_TRIGGER_CHANCE = 0.2;
 const AWAKENING_SCORE_BONUS = 0.1;
-const POWER_LEVEL_EDGE_SCALE = 0.065;
-/** Primary luck swing (per-fighter roll noise is lower via `rngInfluence`). */
-const LUCK_ROLL_SCALE = 0.09;
+// Lowered to reduce stat-total snowball in close PvP mirrors.
+const POWER_LEVEL_EDGE_SCALE = 0.04;
+/** Luck duel scale — lower = base stats + move choice matter more vs raw rolls. */
+const LUCK_ROLL_SCALE = 0.065;
 // Strategy tuning: meaningful in close fights, but not a guaranteed override.
-const STRATEGY_COUNTER_BONUS = 1.12;
-const STRATEGY_AFFINITY_BONUS_CAP = 1.1;
-const STRATEGY_AFFINITY_SCALE = 0.022;
+const STRATEGY_COUNTER_BONUS = 1.09;
+const STRATEGY_AFFINITY_BONUS_CAP = 1.08;
+const STRATEGY_AFFINITY_SCALE = 0.02;
 const STRATEGY_AFFINITY_BASELINE = 50;
-const STRATEGY_TOTAL_EDGE_CAP = 2.15;
+const STRATEGY_TOTAL_EDGE_CAP = 1.9;
 
 // Soft cap: high-tier **shop** moves can swing a close match; cap prevents one button from always deciding everything.
-const PVP_MOVE_BONUS_CAP = 3.5;
+const PVP_MOVE_BONUS_CAP = 3.2;
 
 // Ties: same 2-decimal view as players see; merit breaks (stats, then technique), then coin.
 
@@ -115,7 +115,17 @@ function randomInt(min: number, max: number): number {
 }
 
 function getFighterPowerLevel(fighter: Fighter): number {
-  return fighter.power_level ?? calculatePowerLevel(fighter);
+  // Combat fairness: resolve power from current stats only.
+  // Using W/L in battle math creates runaway snowball where winners keep getting
+  // stronger just by winning, which can lock PvP into one-sided streaks.
+  return (
+    fighter.strength +
+    fighter.speed +
+    fighter.defense +
+    fighter.spirit +
+    fighter.chakra +
+    fighter.luck
+  );
 }
 
 /**
