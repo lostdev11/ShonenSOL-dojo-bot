@@ -9,11 +9,13 @@ import type { DojoCommand } from "../types";
 const command: DojoCommand = {
   data: new SlashCommandBuilder()
     .setName("dojo-spar")
-    .setDescription("Spar the Dojo CPU instantly (no PvP records)."),
+    .setDescription(
+      "Spar the Dojo CPU instantly — private; only you see the result (no PvP records).",
+    ),
 
   async execute(interaction) {
     try {
-      await interaction.deferReply();
+      await interaction.deferReply({ flags: 64 });
       const fighter = await getFighterByDiscordId(interaction.user.id);
       if (!fighter) {
         await interaction.editReply({

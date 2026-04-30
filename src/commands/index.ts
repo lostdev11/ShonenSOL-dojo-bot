@@ -2,6 +2,7 @@ import dojoBattle from "./dojo-battle";
 import dojoCosmetics from "./dojo-cosmetics";
 import dojoDaily from "./dojo-daily";
 import dojoEvents from "./dojo-events";
+import dojoGuide from "./dojo-guide";
 import dojoHealth from "./dojo-health";
 import dojoHistory from "./dojo-history";
 import dojoLeaderboard from "./dojo-leaderboard";
@@ -16,6 +17,7 @@ import dojoTrain from "./dojo-train";
 
 export const commands = [
   dojoRegister,
+  dojoGuide,
   dojoStats,
   dojoBattle,
   dojoHealth,
