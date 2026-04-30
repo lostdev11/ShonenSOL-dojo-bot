@@ -116,6 +116,7 @@ export function buildLobbyText(hostId: string, joiners: LobbyJoiner[]): string {
     `**Host** <@${hostId}>`,
     `**Joined:** ${joiners.length}`,
     "",
+    "• Before joining, register your fighter with **`/dojo-register`**.",
     "• Fighters can **Join** at their own pace — the battle does **not** start automatically.",
     "• Only the **host** can press **Start battle** or **Quick battle** (enabled once at least one person is in the lobby).",
     "• **Start battle** → both players **pick moves**. **Quick battle** → **auto strongest unlocked** move each (no menus).",
