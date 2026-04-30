@@ -10,7 +10,7 @@ import {
 } from "../lib/lobbyState";
 import { startMoveSelectionPhase } from "./moveSelectHandler";
 import { buildCpuFighter } from "../lib/cpuOpponent";
-import { pickAutoMoveId } from "../lib/moves";
+import { pickAutoMoveId, pickRandomMoveId } from "../lib/moves";
 import { runDojoBattleSequence } from "../lib/runDojoBattleSequence";
 import { getFighterByDiscordId } from "../lib/supabase";
 
@@ -240,6 +240,8 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
         opponentUsername: cpuFighter.username,
         challenger: hostFighter,
         opponent: cpuFighter,
+        moveAId: pickRandomMoveId(hostFighter),
+        moveBId: pickRandomMoveId(cpuFighter),
         isCpuBattle: true,
         opponentLabel: "🤖 Dojo CPU",
       });

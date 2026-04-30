@@ -1239,6 +1239,17 @@ export function pickAutoMoveId(fighter: {
   return sorted[0]?.id ?? "basic_strike";
 }
 
+/** Uniform random from unlocked moves — spar / CPU practice. */
+export function pickRandomMoveId(fighter: {
+  unlocked_moves?: string[] | null;
+}): string {
+  const slugs = getUnlockedSlugs(fighter);
+  if (slugs.length === 0) {
+    return "basic_strike";
+  }
+  return slugs[Math.floor(Math.random() * slugs.length)]!;
+}
+
 export function getMoveSelectData(fighter: {
   unlocked_moves?: string[] | null;
 }): { id: string; label: string; description: string; bonus: number }[] {
