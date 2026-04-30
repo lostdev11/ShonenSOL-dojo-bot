@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { buildCpuFighter } from "../lib/cpuOpponent";
-import { pickRandomMoveId } from "../lib/moves";
+import { pickRandomMoveId, pickRandomMoveIdAvoiding } from "../lib/moves";
 import { getFighterByDiscordId } from "../lib/supabase";
 import { runDojoBattleSequence } from "../lib/runDojoBattleSequence";
 import type { DojoCommand } from "../types";
@@ -22,6 +22,8 @@ const command: DojoCommand = {
         return;
       }
       const cpuFighter = buildCpuFighter(fighter);
+      const moveAId = pickRandomMoveId(fighter);
+      const moveBId = pickRandomMoveIdAvoiding(cpuFighter, moveAId);
       await interaction.editReply({
         content: "🥋 **Sparring session** vs CPU — hang tight…",
       });
@@ -32,8 +34,8 @@ const command: DojoCommand = {
         opponentUsername: cpuFighter.username,
         challenger: fighter,
         opponent: cpuFighter,
-        moveAId: pickRandomMoveId(fighter),
-        moveBId: pickRandomMoveId(cpuFighter),
+        moveAId,
+        moveBId,
         isCpuBattle: true,
         opponentLabel: "🤖 Dojo CPU",
         slashInteraction: interaction,

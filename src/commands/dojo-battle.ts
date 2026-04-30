@@ -3,7 +3,7 @@ import { getFighterByDiscordId } from "../lib/supabase";
 import { buildLobbyText, createLobby } from "../lib/lobbyState";
 import { lobbyButtonRows } from "../handlers/lobbyButtons";
 import { buildCpuFighter } from "../lib/cpuOpponent";
-import { pickRandomMoveId } from "../lib/moves";
+import { pickRandomMoveId, pickRandomMoveIdAvoiding } from "../lib/moves";
 import { runDojoBattleSequence } from "../lib/runDojoBattleSequence";
 import type { DojoCommand } from "../types";
 
@@ -36,6 +36,8 @@ const command: DojoCommand = {
       const mode = interaction.options.getString("mode") ?? "pvp";
       if (mode === "cpu") {
         const cpuFighter = buildCpuFighter(fighter);
+        const moveAId = pickRandomMoveId(fighter);
+        const moveBId = pickRandomMoveIdAvoiding(cpuFighter, moveAId);
         await interaction.editReply({
           content: "🧪 Starting CPU test battle...",
         });
@@ -46,8 +48,8 @@ const command: DojoCommand = {
           opponentUsername: cpuFighter.username,
           challenger: fighter,
           opponent: cpuFighter,
-          moveAId: pickRandomMoveId(fighter),
-          moveBId: pickRandomMoveId(cpuFighter),
+          moveAId,
+          moveBId,
           isCpuBattle: true,
           opponentLabel: "🤖 Dojo CPU",
           slashInteraction: interaction,

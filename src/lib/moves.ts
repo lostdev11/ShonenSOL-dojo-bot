@@ -1197,7 +1197,8 @@ function normalizeUnlocked(fighter: { unlocked_moves?: string[] | null }): strin
     const filtered = raw.filter((id) => id in MOVE_CATALOG);
     // Junk-only rows would leave no moves — fall back so shop/battle stay valid.
     if (filtered.length > 0) {
-      return filtered;
+      // Always include starter trio — some DB rows only list extras (or one slug).
+      return [...new Set([...STARTER_MOVE_IDS, ...filtered])];
     }
   }
   return [...STARTER_MOVE_IDS];
@@ -1248,6 +1249,25 @@ export function pickRandomMoveId(fighter: {
     return "basic_strike";
   }
   return slugs[Math.floor(Math.random() * slugs.length)]!;
+}
+
+/** Random pick that avoids a slug when another option exists (CPU spar vs mirroring you). */
+export function pickRandomMoveIdAvoiding(
+  fighter: { unlocked_moves?: string[] | null },
+  avoidId: string | null | undefined,
+): string {
+  const slugs = getUnlockedSlugs(fighter);
+  if (slugs.length === 0) {
+    return "basic_strike";
+  }
+  if (avoidId == null || avoidId === "") {
+    return slugs[Math.floor(Math.random() * slugs.length)]!;
+  }
+  const pool = slugs.filter((id) => id !== avoidId);
+  if (pool.length === 0) {
+    return slugs[Math.floor(Math.random() * slugs.length)]!;
+  }
+  return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
 export function getMoveSelectData(fighter: {
