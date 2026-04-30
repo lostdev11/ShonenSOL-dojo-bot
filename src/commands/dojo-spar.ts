@@ -12,16 +12,16 @@ const command: DojoCommand = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply();
       const fighter = await getFighterByDiscordId(interaction.user.id);
       if (!fighter) {
-        await interaction.reply({
+        await interaction.editReply({
           content: "You are not registered. Use `/dojo-register` first.",
-          flags: 64,
         });
         return;
       }
       const cpuFighter = buildCpuFighter(fighter);
-      await interaction.reply({
+      await interaction.editReply({
         content: "🥋 **Sparring session** vs CPU — hang tight…",
       });
       const battleMessage = await interaction.fetchReply();
@@ -33,6 +33,7 @@ const command: DojoCommand = {
         opponent: cpuFighter,
         isCpuBattle: true,
         opponentLabel: "🤖 Dojo CPU",
+        slashInteraction: interaction,
       });
     } catch (error) {
       console.error("dojo-spar failed:", error);

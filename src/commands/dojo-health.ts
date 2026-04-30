@@ -30,20 +30,19 @@ const command: DojoCommand = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply({ flags: 64 });
       const channel = interaction.channel;
       if (!channel || !("permissionsFor" in channel)) {
-        await interaction.reply({
+        await interaction.editReply({
           content: "Could not inspect permissions in this channel.",
-          flags: 64,
         });
         return;
       }
 
       const me = interaction.guild?.members.me;
       if (!me) {
-        await interaction.reply({
+        await interaction.editReply({
           content: "Bot member context not found. Try again in a server channel.",
-          flags: 64,
         });
         return;
       }
@@ -59,7 +58,7 @@ const command: DojoCommand = {
           : "";
 
       if (missing.length === 0) {
-        await interaction.reply({
+        await interaction.editReply({
           content: [
             "✅ **Dojo health check passed**",
             "",
@@ -68,12 +67,11 @@ const command: DojoCommand = {
           ]
             .filter(Boolean)
             .join("\n"),
-          flags: 64,
         });
         return;
       }
 
-      await interaction.reply({
+      await interaction.editReply({
         content: [
           "❌ **Dojo health check failed**",
           "",
@@ -85,14 +83,14 @@ const command: DojoCommand = {
         ]
           .filter(Boolean)
           .join("\n"),
-        flags: 64,
       });
     } catch (error) {
       console.error("dojo-health failed:", error);
-      await interaction.reply({
-        content: "Could not run dojo health check.",
-        flags: 64,
-      });
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: "Could not run dojo health check." });
+        return;
+      }
+      await interaction.reply({ content: "Could not run dojo health check.", flags: 64 });
     }
   },
 };

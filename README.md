@@ -43,6 +43,7 @@ Beginner-friendly Discord bot built with Node.js, TypeScript, discord.js, and Su
    - `DISCORD_TOKEN`
    - `DISCORD_CLIENT_ID`
    - `DISCORD_GUILD_ID` (optional — if set, slash commands deploy only to that guild; comma-separate multiple IDs, or omit / use `DISCORD_DEPLOY_GLOBAL=true` for every server)
+   - `DOJO_COMMAND_CHANNEL_IDS` (optional — comma-separated channel IDs where dojo slash commands are allowed; omit to allow all channels)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 

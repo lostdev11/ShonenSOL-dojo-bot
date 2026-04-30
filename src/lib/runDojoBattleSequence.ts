@@ -1,4 +1,9 @@
-import type { Message, User } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  Message,
+  MessageEditOptions,
+  User,
+} from "discord.js";
 import { recordBo3RoundWin } from "./bo3Session";
 import { getMoveById, ARCHETYPE_PLAYSTYLE } from "./moves";
 import { simulateBattle } from "./battleEngine";
@@ -13,8 +18,70 @@ import {
 } from "./supabase";
 import type { DojoSeason, Fighter } from "../types";
 
+const DISCORD_MESSAGE_CONTENT_LIMIT = 2000;
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function truncateDiscordContent(content: string): string {
+  if (content.length <= DISCORD_MESSAGE_CONTENT_LIMIT) {
+    return content;
+  }
+  const note = `\n… _Truncated (${content.length} chars) — Discord limit is ${DISCORD_MESSAGE_CONTENT_LIMIT}._`;
+  const budget = DISCORD_MESSAGE_CONTENT_LIMIT - note.length;
+  return `${content.slice(0, Math.max(0, budget))}${note}`;
+}
+
+async function addChakraPointsWithTimeout(
+  discordUserId: string,
+  amount: number,
+  ms: number,
+): Promise<boolean> {
+  try {
+    const result = await Promise.race([
+      addChakraPointsFromActivity(discordUserId, amount),
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => resolve(false), ms),
+      ),
+    ]);
+    return result;
+  } catch {
+    return false;
+  }
+}
+
+async function applyBattleUpdate(
+  message: Message,
+  slashInteraction: ChatInputCommandInteraction | undefined,
+  opts: Pick<MessageEditOptions, "content" | "components">,
+): Promise<void> {
+  const content = truncateDiscordContent(opts.content ?? "");
+  const components = opts.components ?? [];
+
+  if (slashInteraction && (slashInteraction.deferred || slashInteraction.replied)) {
+    try {
+      await slashInteraction.editReply({ content, components });
+      return;
+    } catch (e) {
+      console.error("runDojoBattleSequence: editReply failed, trying message.edit:", e);
+    }
+  }
+
+  try {
+    await message.edit({ content, components });
+  } catch (e) {
+    console.error("runDojoBattleSequence: message.edit failed:", e);
+    const ch = message.channel;
+    if (ch?.isTextBased() && ch.isSendable()) {
+      const errNote = `\n\n⚠️ _Could not edit the battle message (${String((e as Error)?.message ?? e).slice(0, 160)})._`;
+      await ch
+        .send({ content: truncateDiscordContent(content + errNote) })
+        .catch((e2) => {
+          console.error("runDojoBattleSequence: channel.send fallback failed:", e2);
+        });
+    }
+  }
 }
 
 async function getActiveSeasonWithTimeout(
@@ -143,6 +210,8 @@ export async function runDojoBattleSequence(
     opponentLabel?: string;
     /** Active Best-of-3 series (mid-series rounds). */
     bo3SessionId?: string;
+    /** Slash command interaction — updates use editReply when set (interaction replies). */
+    slashInteraction?: ChatInputCommandInteraction;
   },
 ): Promise<void> {
   const {
@@ -156,6 +225,7 @@ export async function runDojoBattleSequence(
     isCpuBattle = false,
     opponentLabel,
     bo3SessionId,
+    slashInteraction,
   } = options;
   const opponentDisplay = opponentLabel ?? `<@${opponentId}>`;
 
@@ -194,11 +264,10 @@ export async function runDojoBattleSequence(
   ]);
 
   const edit = async (content: string) => {
-    try {
-      await message.edit({ content, components: [] });
-    } catch (e) {
-      console.error("runDojoBattleSequence: message.edit failed:", e);
-    }
+    await applyBattleUpdate(message, slashInteraction, {
+      content,
+      components: [],
+    });
   };
 
   await edit(
@@ -264,9 +333,10 @@ export async function runDojoBattleSequence(
       ? `\n\n💠 **Chakra Points** — winner **+${cpAward.winnerGain}** · loser **+${cpAward.loserGain}**`
       : "";
   } else {
-    const cpuCpOk = await addChakraPointsFromActivity(
+    const cpuCpOk = await addChakraPointsWithTimeout(
       challenger.discord_user_id,
       CHAKRA_POINTS_CPU_BATTLE,
+      10_000,
     );
     cpLine = cpuCpOk
       ? `\n\n💠 **Chakra Points** — **+${CHAKRA_POINTS_CPU_BATTLE}** for completing a CPU battle (PvP records not saved).`
@@ -339,16 +409,12 @@ export async function runDojoBattleSequence(
   const showReplayButtons =
     !isCpuBattle && !bo3MidSeries;
 
-  try {
-    await message.edit({
-      content: finalContent,
-      components: showReplayButtons
-        ? buildPostBattleRows(challenger.discord_user_id, opponentId)
-        : [],
-    });
-  } catch (e) {
-    console.error("runDojoBattleSequence: final message.edit failed:", e);
-  }
+  await applyBattleUpdate(message, slashInteraction, {
+    content: finalContent,
+    components: showReplayButtons
+      ? buildPostBattleRows(challenger.discord_user_id, opponentId)
+      : [],
+  });
 
   const hypeReact =
     result.awakeningTriggered || result.isPhotoFinish || result.tieBreakCoinFlip;

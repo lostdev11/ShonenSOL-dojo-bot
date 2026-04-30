@@ -20,6 +20,12 @@ import {
 } from "./handlers/moveSelectHandler";
 
 const token = process.env.DISCORD_TOKEN;
+const dojoCommandChannelIds = new Set(
+  (process.env.DOJO_COMMAND_CHANNEL_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
 
 if (!token) {
   throw new Error("Missing DISCORD_TOKEN in .env");
@@ -80,6 +86,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) {
+    return;
+  }
+
+  if (
+    dojoCommandChannelIds.size > 0 &&
+    !dojoCommandChannelIds.has(interaction.channelId)
+  ) {
+    await interaction
+      .reply({
+        content:
+          "Dojo commands are limited to bot-command channels right now. Use them in an allowed channel.",
+        flags: 64,
+      })
+      .catch(() => {});
     return;
   }
 

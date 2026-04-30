@@ -22,12 +22,12 @@ const command: DojoCommand = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply();
       const host = interaction.user;
       const fighter = await getFighterByDiscordId(host.id);
       if (!fighter) {
-        await interaction.reply({
+        await interaction.editReply({
           content: "You are not registered. Use `/dojo-register` first.",
-          flags: 64,
         });
         return;
       }
@@ -35,7 +35,7 @@ const command: DojoCommand = {
       const mode = interaction.options.getString("mode") ?? "pvp";
       if (mode === "cpu") {
         const cpuFighter = buildCpuFighter(fighter);
-        await interaction.reply({
+        await interaction.editReply({
           content: "🧪 Starting CPU test battle...",
         });
         const battleMessage = await interaction.fetchReply();
@@ -47,13 +47,14 @@ const command: DojoCommand = {
           opponent: cpuFighter,
           isCpuBattle: true,
           opponentLabel: "🤖 Dojo CPU",
+          slashInteraction: interaction,
         });
         return;
       }
 
       const { lobbyId } = createLobby(host.id);
 
-      await interaction.reply({
+      await interaction.editReply({
         content: buildLobbyText(host.id, []),
         // Host cannot start until someone joins; gives everyone time to enter the dojo.
         components: lobbyButtonRows(lobbyId, false),
