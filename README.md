@@ -42,7 +42,7 @@ Beginner-friendly Discord bot built with Node.js, TypeScript, discord.js, and Su
 3. Fill in `.env` values:
    - `DISCORD_TOKEN`
    - `DISCORD_CLIENT_ID`
-   - `DISCORD_GUILD_ID` (optional, recommended for testing)
+   - `DISCORD_GUILD_ID` (optional — if set, slash commands deploy only to that guild; comma-separate multiple IDs, or omit / use `DISCORD_DEPLOY_GLOBAL=true` for every server)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 
@@ -144,8 +144,8 @@ Deploy slash commands (run this after changing any command options so Discord sh
 npm run deploy:commands
 ```
 
-- If `DISCORD_GUILD_ID` is set, commands deploy to that guild (fast).
-- If not set, commands deploy globally (can take up to an hour).
+- If `DISCORD_GUILD_ID` is set, commands deploy only to those guilds (comma-separated; updates are instant). Other servers will not see commands until you add their guild ID here and redeploy, or deploy globally.
+- If `DISCORD_GUILD_ID` is unset, or you set `DISCORD_DEPLOY_GLOBAL=true`, commands deploy globally (available in every server the bot is in; Discord may take up to an hour to show updates).
 
 ## Run the Bot
 

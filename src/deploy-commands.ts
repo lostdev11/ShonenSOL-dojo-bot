@@ -4,7 +4,10 @@ import { commands } from "./commands";
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
-const guildId = process.env.DISCORD_GUILD_ID;
+const guildIdRaw = process.env.DISCORD_GUILD_ID?.trim();
+const deployGlobal =
+  process.env.DISCORD_DEPLOY_GLOBAL === "true" ||
+  process.env.DISCORD_DEPLOY_GLOBAL === "1";
 
 if (!token || !clientId) {
   throw new Error(
@@ -17,11 +20,17 @@ const safeClientId = clientId;
 const commandData = commands.map((command) => command.data.toJSON());
 
 async function deployCommands() {
-  if (guildId) {
-    await rest.put(Routes.applicationGuildCommands(safeClientId, guildId), {
-      body: commandData,
-    });
-    console.log(`Deployed commands to guild ${guildId}.`);
+  if (!deployGlobal && guildIdRaw) {
+    const guildIds = guildIdRaw
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    for (const gid of guildIds) {
+      await rest.put(Routes.applicationGuildCommands(safeClientId, gid), {
+        body: commandData,
+      });
+      console.log(`Deployed commands to guild ${gid}.`);
+    }
     return;
   }
 
