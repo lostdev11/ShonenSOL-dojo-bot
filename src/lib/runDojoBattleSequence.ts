@@ -100,6 +100,9 @@ async function getActiveSeasonWithTimeout(
   }
 }
 
+/** CPU battles skip writes; PvP used to await these indefinitely and never showed the final embed if Supabase hung. */
+const PVP_PERSIST_TIMEOUT_MS = 18_000;
+
 function randomPick(lines: string[]): string {
   return lines[Math.floor(Math.random() * lines.length)] ?? lines[0]!;
 }
@@ -296,30 +299,49 @@ export async function runDojoBattleSequence(
   let streakInfo:
     | { winnerWinStreak: number; loserLossStreak: number }
     | undefined;
+  let persistWarning = "";
 
   if (!isCpuBattle) {
-    await saveBattleResult({
-      challenger_id: challenger.discord_user_id,
-      opponent_id: opponentId,
-      challenger_score: result.fighterA_score,
-      opponent_score: result.fighterB_score,
-      winner_id: result.winner.discord_user_id,
-      battle_summary: result.summary,
-      ...(activeSeason ? { season_id: activeSeason.id } : {}),
-    });
+    try {
+      await Promise.race([
+        (async () => {
+          await saveBattleResult({
+            challenger_id: challenger.discord_user_id,
+            opponent_id: opponentId,
+            challenger_score: result.fighterA_score,
+            opponent_score: result.fighterB_score,
+            winner_id: result.winner.discord_user_id,
+            battle_summary: result.summary,
+            ...(activeSeason ? { season_id: activeSeason.id } : {}),
+          });
 
-    streakInfo = await updateBattleRecords(
-      result.winner.discord_user_id,
-      result.loser.discord_user_id,
-    );
+          streakInfo = await updateBattleRecords(
+            result.winner.discord_user_id,
+            result.loser.discord_user_id,
+          );
 
-    const cpAward = await awardChakraAfterBattle(
-      result.winner.discord_user_id,
-      result.loser.discord_user_id,
-    );
-    cpLine = cpAward.ok
-      ? `\n\n💠 **Chakra Points** — winner **+${cpAward.winnerGain}** · loser **+${cpAward.loserGain}**`
-      : "";
+          const cpAward = await awardChakraAfterBattle(
+            result.winner.discord_user_id,
+            result.loser.discord_user_id,
+          );
+          cpLine = cpAward.ok
+            ? `\n\n💠 **Chakra Points** — winner **+${cpAward.winnerGain}** · loser **+${cpAward.loserGain}**`
+            : "";
+        })(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("pvp_persist_timeout")),
+            PVP_PERSIST_TIMEOUT_MS,
+          ),
+        ),
+      ]);
+    } catch (e) {
+      console.error("runDojoBattleSequence: PvP persistence failed or timed out:", e);
+      streakInfo = undefined;
+      cpLine = "";
+      persistWarning =
+        "\n\n⚠️ _Outcome is shown locally, but **records/chakra did not sync** (database timeout or error). Check Supabase or try again shortly._";
+    }
   } else {
     const cpuCpOk = await addChakraPointsWithTimeout(
       challenger.discord_user_id,
@@ -387,6 +409,7 @@ export async function runDojoBattleSequence(
     activeSeason ? `Season: **${activeSeason.name}**` : "",
     result.awakeningTriggered ? "\n🔥 **AWAKENING TRIGGERED**" : "",
     cpLine,
+    persistWarning,
     bo3Append,
     "",
     `🏆 Winner: ${result.winner.discord_user_id === challenger.discord_user_id ? challengerUser.toString() : opponentDisplay}`,
