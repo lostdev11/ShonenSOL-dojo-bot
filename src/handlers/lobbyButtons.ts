@@ -105,6 +105,14 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
       });
       return;
     }
+    const fighter = await getFighterByDiscordId(interaction.user.id);
+    if (!fighter) {
+      await interaction.reply({
+        content: "You must register first with `/dojo-register` before joining a battle lobby.",
+        flags: 64,
+      });
+      return;
+    }
     const done = addJoiner(lobbyId, {
       id: interaction.user.id,
       username: interaction.user.username,
@@ -120,7 +128,6 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
       await interaction.reply({ content: "You are already in the lobby.", flags: 64 });
       return;
     }
-    // Join is accepted immediately; registration is validated when host starts.
     const afterJoin = getLobby(lobbyId);
     if (!afterJoin) {
       await interaction.followUp({
@@ -277,7 +284,11 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
     await interaction.deferUpdate();
     const picked = await pickRandomRegisteredOpponent(lobby.joiners);
     if (!picked) {
-      await interaction.followUp({ content: "No challenger available. Try again.", flags: 64 });
+      await interaction.followUp({
+        content:
+          "No eligible challenger available. Ask someone to join with a registered fighter (`/dojo-register`) and try again.",
+        flags: 64,
+      });
       return;
     }
     const challengerFighter = await getFighterByDiscordId(lobby.hostId);
