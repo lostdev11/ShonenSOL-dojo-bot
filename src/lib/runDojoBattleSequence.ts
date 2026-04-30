@@ -5,7 +5,7 @@ import type {
   User,
 } from "discord.js";
 import { recordBo3RoundWin } from "./bo3Session";
-import { getMoveById, ARCHETYPE_PLAYSTYLE } from "./moves";
+import { getMoveById, ARCHETYPE_PLAYSTYLE, type MoveDefinition } from "./moves";
 import { simulateBattle } from "./battleEngine";
 import { CHAKRA_POINTS_CPU_BATTLE } from "./chakraPoints";
 import { buildPostBattleRows } from "./postBattleButtons";
@@ -104,20 +104,8 @@ function randomPick(lines: string[]): string {
   return lines[Math.floor(Math.random() * lines.length)] ?? lines[0]!;
 }
 
-function buildMoveCallout(username: string, moveId: string): string {
-  const lineByMove: Record<string, string> = {
-    basic_strike: `${username} throws a clean Basic Strike to test the guard.`,
-    guard: `${username} tightens stance and waits behind a disciplined Guard.`,
-    quick_step: `${username} vanishes with Quick Step and reappears at an angle.`,
-    gale_sweep: `${username} whips a Gale Sweep at ankle level.`,
-    iron_parry: `${username} snaps an Iron Parry and turns defense into pressure.`,
-    spirit_palm: `${username} launches Spirit Palm with a burst of chakra.`,
-    raikiri_feint: `${username} baits high, then cuts in with Lightning Feint.`,
-    tempest_kick: `${username} spins into Tempest Kick with relentless momentum.`,
-    domain_pin: `${username} anchors center line with Domain Pin control.`,
-    dojo_ultimate: `${username} unleashes the Dojo Finisher and the crowd loses it.`,
-  };
-  return lineByMove[moveId] ?? `${username} commits to a signature technique.`;
+function buildMoveCallout(username: string, move: MoveDefinition): string {
+  return `${username} commits **${move.name}** — _${move.short}_`;
 }
 
 function buildSameMoveJoke(moveName: string): string {
@@ -239,8 +227,8 @@ export async function runDojoBattleSequence(
   const mB = getMoveById(moveBId);
   const moveLine = `**Moves** — ${challengerUser.username}: *${mA.name}* (+${mA.finalScoreFlatBonus.toFixed(1)}) | ${opponentUsername}: *${mB.name}* (+${mB.finalScoreFlatBonus.toFixed(1)})`;
   const playstyleLine = `_Playstyles:_ **${ARCHETYPE_PLAYSTYLE[mA.archetype]}** vs **${ARCHETYPE_PLAYSTYLE[mB.archetype]}** — ${mA.short} / ${mB.short}`;
-  const moveCalloutA = buildMoveCallout(challengerUser.username, mA.id);
-  const moveCalloutB = buildMoveCallout(opponentUsername, mB.id);
+  const moveCalloutA = buildMoveCallout(challengerUser.username, mA);
+  const moveCalloutB = buildMoveCallout(opponentUsername, mB);
   const sameMoveLine =
     mA.id === mB.id ? `\n😂 ${buildSameMoveJoke(mA.name)}` : "";
 

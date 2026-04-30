@@ -46,6 +46,14 @@ Beginner-friendly Discord bot built with Node.js, TypeScript, discord.js, and Su
    - `DOJO_COMMAND_CHANNEL_IDS` (optional — comma-separated channel IDs where dojo slash commands are allowed; omit to allow all channels)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `ALLOWED_GUILD_IDS` (optional — comma-separated guild IDs; if set, slash commands + buttons/selects ignore every other guild and DMs)
+
+## Security Notes
+
+- **Secrets:** Keep `DISCORD_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and `.env` off Git (only `.env.example` ships). Prefer platform secret managers (Railway Variables, GitHub Secrets) for CI.
+- **Supabase service role:** The bot uses the **service role** key so it can update fighter rows directly. Anyone with this key bypasses Row Level Security. Never expose it in client apps or browser code.
+- **Lock the bot to your servers:** Set `ALLOWED_GUILD_IDS` to your Discord server ID(s). New invites elsewhere will hit a short “not enabled” reply instead of talking to Supabase on your behalf.
+- **Minimal scopes:** Invite the bot only with intents and channel permissions it needs (`Guilds` only for this codebase; roles need View Channel, Send Messages, Read History, Slash commands, Embed if you use embeds later, Attach Files if you ship images).
 
 ## Supabase Tables
 

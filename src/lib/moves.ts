@@ -2,6 +2,7 @@
 
 import { calculatePowerLevel } from "./stats";
 import type { Fighter } from "../types";
+import { MOVE_BATTLE_PHRASES } from "./moveBattlePhrases";
 
 export type MoveTier = 0 | 1 | 2 | 3 | 4;
 
@@ -37,6 +38,8 @@ export type MoveDefinition = {
   tier: MoveTier;
   /** Cost in Chakra Points; `null` = not sold in `/dojo-shop` (starters). */
   shopPrice: number | null;
+  /** Fighter shout line tied to this move (battle reveal 💬). */
+  battlePhrase: string;
 };
 
 export const STARTER_MOVE_IDS: readonly string[] = [
@@ -45,7 +48,7 @@ export const STARTER_MOVE_IDS: readonly string[] = [
   "quick_step",
 ];
 
-export const MOVE_CATALOG: Record<string, MoveDefinition> = {
+const MOVE_CATALOG_RAW: Record<string, Omit<MoveDefinition, "battlePhrase">> = {
   basic_strike: {
     id: "basic_strike",
     name: "Basic Strike",
@@ -1149,6 +1152,22 @@ export const MOVE_CATALOG: Record<string, MoveDefinition> = {
     shopPrice: 346,
   },
 };
+
+export const MOVE_CATALOG: Record<string, MoveDefinition> = Object.fromEntries(
+  Object.entries(MOVE_CATALOG_RAW).map(([id, m]) => {
+    const battlePhrase = MOVE_BATTLE_PHRASES[id];
+    if (!battlePhrase) {
+      throw new Error(`Missing MOVE_BATTLE_PHRASES entry for move: ${id}`);
+    }
+    return [id, { ...m, battlePhrase }] as const;
+  }),
+) as Record<string, MoveDefinition>;
+
+for (const id of Object.keys(MOVE_BATTLE_PHRASES)) {
+  if (!MOVE_CATALOG_RAW[id]) {
+    throw new Error(`MOVE_BATTLE_PHRASES has unknown move id: ${id}`);
+  }
+}
 
 const TARGET_SHOP_MOVE_COUNT = 50;
 const TARGET_TRAIN_UNLOCK_COUNT = 50;

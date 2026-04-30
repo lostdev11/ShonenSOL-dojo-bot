@@ -387,9 +387,9 @@ export function simulateBattle(
   const fighterAWithRng = applyRNG(fighterAStatScore);
   const fighterBWithRng = applyRNG(fighterBStatScore);
   const powerLuck = computePowerLuckEdges(effectiveFighterA, effectiveFighterB);
-  const quoteMomentum = generateQuoteMomentum();
   const moveA = getMoveById(options.moveAId);
   const moveB = getMoveById(options.moveBId);
+  const quoteMomentum = generateQuoteMomentum(moveA.battlePhrase, moveB.battlePhrase);
   const strategy = computeMoveStrategyEdges(
     effectiveFighterA,
     effectiveFighterB,

@@ -5,7 +5,10 @@ import {
 } from "discord.js";
 import type { Message, StringSelectMenuInteraction, User } from "discord.js";
 import type { ButtonInteraction } from "discord.js";
-import { getMoveById, getMoveSelectData } from "../lib/moves";
+import {
+  getMoveById,
+  getMoveSelectData,
+} from "../lib/moves";
 import {
   getMoveSession,
   MOVE_SELECT_PREFIX,
@@ -275,7 +278,21 @@ export async function handleMoveStringSelect(
     });
     return;
   }
-  const pick = interaction.values[0] ?? "basic_strike";
+  const fighterForPick =
+    parsed.role === "h" ? s.hostFighter : s.oppFighter;
+  const allowedMoveIds = new Set(
+    getMoveSelectData(fighterForPick).map((o) => o.id),
+  );
+  const pickRaw = interaction.values[0];
+  if (!pickRaw || !allowedMoveIds.has(pickRaw)) {
+    await interaction.reply({
+      content:
+        "That move isn’t valid for you in this match. Choose again from your menu.",
+      flags: 64,
+    });
+    return;
+  }
+  const pick = pickRaw;
   if (parsed.role === "h") {
     s.moveHost = pick;
   } else {

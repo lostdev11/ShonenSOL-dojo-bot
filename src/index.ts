@@ -1,5 +1,10 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  type Interaction,
+} from "discord.js";
 import { commands } from "./commands";
 import {
   handlePostBattleButton,
@@ -27,6 +32,34 @@ const dojoCommandChannelIds = new Set(
     .filter(Boolean),
 );
 
+/** Optional: reject all interactions outside these guilds (comma-separated Discord guild IDs). */
+const allowedGuildIds = new Set(
+  (process.env.ALLOWED_GUILD_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+
+function isGuildAllowedForInteraction(interaction: Interaction): boolean {
+  if (allowedGuildIds.size === 0) {
+    return true;
+  }
+  const gid = interaction.guildId;
+  return gid !== null && allowedGuildIds.has(gid);
+}
+
+async function rejectGuildNotAllowed(interaction: Interaction): Promise<void> {
+  const msg =
+    "This bot instance isn’t enabled for this server (DMs aren’t supported when a guild allowlist is set). Configure **ALLOWED_GUILD_IDS** or use an approved server.";
+  if (
+    interaction.isRepliable() &&
+    !interaction.replied &&
+    !interaction.deferred
+  ) {
+    await interaction.reply({ content: msg, flags: 64 }).catch(() => {});
+  }
+}
+
 if (!token) {
   throw new Error("Missing DISCORD_TOKEN in .env");
 }
@@ -40,6 +73,11 @@ client.once(Events.ClientReady, (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (!isGuildAllowedForInteraction(interaction)) {
+    await rejectGuildNotAllowed(interaction);
+    return;
+  }
+
   if (interaction.isButton() && isPostBattleButton(interaction.customId)) {
     try {
       await handlePostBattleButton(interaction);
@@ -111,7 +149,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  await command.execute(interaction);
+  try {
+    await command.execute(interaction);
+  } catch (err) {
+    console.error(`slash /${interaction.commandName} failed:`, err);
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply({
+          content:
+            "Something went wrong handling that command. Try again shortly; admins can check host logs.",
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content:
+            "Something went wrong handling that command. Try again shortly.",
+          flags: 64,
+        });
+      } else {
+        await interaction.reply({
+          content:
+            "Something went wrong handling that command. Try again shortly.",
+          flags: 64,
+        });
+      }
+    } catch {
+      /* already acknowledged or expired */
+    }
+  }
 });
 
 client.login(token).catch((error) => {
