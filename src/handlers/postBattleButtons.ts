@@ -62,9 +62,9 @@ export async function handlePostBattleButton(
     await (channel as TextChannel).send({
       content: [
         "🔁 **Run it back** — same pairing, fresh lobby.",
-        buildLobbyText(hostId, [{ id: oppId, username: oppUser.username }]),
+        buildLobbyText(hostId, [{ id: oppId, username: oppUser.username }], "bracket"),
       ].join("\n\n"),
-      components: lobbyButtonRows(lobbyId, true),
+      components: lobbyButtonRows(lobbyId, true, "bracket"),
     });
     await interaction.editReply({
       content: "Posted a **Run it back** lobby below.",

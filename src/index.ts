@@ -20,6 +20,10 @@ import {
   isDojoShopSelect,
 } from "./handlers/shopHandler";
 import {
+  handleFfaMoveStringSelect,
+  isFfaMoveSelectMenu,
+} from "./handlers/ffaMoveSelectHandler";
+import {
   handleMoveStringSelect,
   isMoveSelectMenu,
 } from "./handlers/moveSelectHandler";
@@ -110,6 +114,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await handleDojoShopSelect(interaction);
     } catch (err) {
       console.error("shop select failed:", err);
+    }
+    return;
+  }
+
+  if (interaction.isStringSelectMenu() && isFfaMoveSelectMenu(interaction.customId)) {
+    try {
+      await handleFfaMoveStringSelect(interaction);
+    } catch (err) {
+      console.error("FFA move select failed:", err);
     }
     return;
   }

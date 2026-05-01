@@ -5,10 +5,14 @@ export type LobbyJoiner = {
   username: string;
 };
 
+/** `bracket` — random 1v1 pairings. `ffa` — everyone in one multi-way fight. */
+export type LobbyFormat = "bracket" | "ffa";
+
 export type DojoLobby = {
   hostId: string;
   joiners: LobbyJoiner[];
   createdAt: number;
+  format: LobbyFormat;
 };
 
 // Lobbies stay open a long time so the host can wait for several people to join.
@@ -23,12 +27,16 @@ function randomLobbyId(): string {
   );
 }
 
-export function createLobby(hostId: string): { lobbyId: string } {
+export function createLobby(
+  hostId: string,
+  format: LobbyFormat = "bracket",
+): { lobbyId: string } {
   const lobbyId = randomLobbyId();
   lobbies.set(lobbyId, {
     hostId,
     joiners: [],
     createdAt: Date.now(),
+    format,
   });
   return { lobbyId };
 }
@@ -43,6 +51,7 @@ export function createRematchLobby(
     hostId,
     joiners: [{ id: opponent.id, username: opponent.username }],
     createdAt: Date.now(),
+    format: "bracket",
   });
   return { lobbyId };
 }
@@ -97,7 +106,11 @@ export function pickRandomOpponent(lobbyId: string): LobbyJoiner | null {
   return lobby.joiners[idx] ?? null;
 }
 
-export function buildLobbyText(hostId: string, joiners: LobbyJoiner[]): string {
+export function buildLobbyText(
+  hostId: string,
+  joiners: LobbyJoiner[],
+  format: LobbyFormat,
+): string {
   const visible = joiners.slice(0, MAX_LOBBY_PREVIEW);
   const extraCount = Math.max(0, joiners.length - visible.length);
   const joinerLines =
@@ -110,18 +123,39 @@ export function buildLobbyText(hostId: string, joiners: LobbyJoiner[]): string {
           .filter(Boolean)
           .join("\n");
 
-  return [
-    "⚔️ **ShonenSOL Battle Lobby**",
+  const commonHead = [
+    format === "ffa"
+      ? "⚔️ **ShonenSOL Free-for-all Lobby**"
+      : "⚔️ **ShonenSOL Battle Lobby**",
     "",
     `**Host** <@${hostId}>`,
     `**Joined:** ${joiners.length}`,
     "",
     "• Before joining, register your fighter with **`/dojo-register`**.",
-    "• Fighters can **Join** at their own pace — the battle does **not** start automatically.",
-    "• Only the **host** can press **Start battle** or **Quick battle** (enabled once at least one person is in the lobby).",
-    "• **Start battle** → both players **pick moves**. **Quick battle** → **auto strongest unlocked** move each (no menus).",
-    "• Either start picks **one random challenger** — every joiner has **equal odds** to be selected.",
+    "• Fighters can **Join** at their own pace — nothing starts automatically.",
     "• **Fight CPU (test)** — instant **solo practice** (no PvP records/CP; does not need joiners).",
+    "",
+  ];
+
+  if (format === "ffa") {
+    return [
+      ...commonHead,
+      "• Only the **host** can run **FFA · pick moves** or **FFA · quick** (enabled once someone joined).",
+      "• **Everyone vs everyone** — one clash; **one winner**, everyone else logs a loss for ranked stats.",
+      "• **FFA · pick moves** — each fighter uses **their menu** (max **5** fighters with menus; use **quick** if you have more).",
+      "• **FFA · quick** — **auto strongest unlocked** move per fighter (any lobby size).",
+      "",
+      "**In the dojo**",
+      joinerLines,
+    ].join("\n");
+  }
+
+  return [
+    ...commonHead,
+    "• Only the **host** can press **Brackets · moves** or **Brackets · quick** (enabled once at least one person is in the lobby).",
+    "• **Brackets · moves** → **pick moves** per 1v1. **Brackets · quick** → **auto** moves (no menus).",
+    "• Start **pairs everyone** (host + registered joiners): **random matchups**, **one Discord message per fight**.",
+    "• With an **odd** number of registered fighters, **one random fighter sits out** that round.",
     "",
     "**In the dojo**",
     joinerLines,

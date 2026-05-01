@@ -16,7 +16,8 @@ const command: DojoCommand = {
         .setName("mode")
         .setDescription("Battle mode")
         .addChoices(
-          { name: "Lobby (PvP)", value: "pvp" },
+          { name: "Lobby · brackets (1v1)", value: "pvp" },
+          { name: "Lobby · free-for-all", value: "ffa" },
           { name: "CPU (testing)", value: "cpu" },
         ),
     ),
@@ -57,12 +58,12 @@ const command: DojoCommand = {
         return;
       }
 
-      const { lobbyId } = createLobby(host.id);
+      const lobbyFormat = mode === "ffa" ? "ffa" : "bracket";
+      const { lobbyId } = createLobby(host.id, lobbyFormat);
 
       await interaction.editReply({
-        content: buildLobbyText(host.id, []),
-        // Host cannot start until someone joins; gives everyone time to enter the dojo.
-        components: lobbyButtonRows(lobbyId, false),
+        content: buildLobbyText(host.id, [], lobbyFormat),
+        components: lobbyButtonRows(lobbyId, false, lobbyFormat),
       });
     } catch (error) {
       console.error("dojo-battle failed:", error);

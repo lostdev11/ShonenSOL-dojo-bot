@@ -496,6 +496,226 @@ export function simulateBattle(
   };
 }
 
+export type FreeForAllInput = {
+  fighter: Fighter;
+  moveId: string;
+};
+
+export type FreeForAllPlacement = {
+  fighter: Fighter;
+  moveId: string;
+  finalScore: number;
+  statScore: number;
+  rngRoll: number;
+  rngScore: number;
+  powerEdge: number;
+  luckSwing: number;
+  strategyEdge: number;
+  moveBonus: number;
+  quoteEdgeContribution: number;
+};
+
+export type SimulatedFreeForAllResult = {
+  placements: FreeForAllPlacement[];
+  winner: Fighter;
+  runnerUp: Fighter | null;
+  summary: string;
+  photoFinish: boolean;
+  tieBreakCoinFlip: boolean;
+};
+
+function createFreeForAllSummary(winner: Fighter, count: number): string {
+  const lines = [
+    `Absolute chaos — ${winner.username} stands last among ${count} rivals as techniques fly from every angle.`,
+    `The dojo becomes a storm of chakra — ${winner.username} reads the brawl and steals the crown.`,
+    `Everyone hits everyone — ${winner.username} finds the one opening nobody else saw.`,
+    `Multi-way clash resolves: ${winner.username} earns bragging rights in the free-for-all.`,
+  ];
+  return lines[randomInt(0, lines.length - 1)] ?? `${winner.username} wins the free-for-all.`;
+}
+
+/**
+ * N-way fight: each fighter scores vs the field (mean opponents for power/luck),
+ * move counters averaged across rivals, quote swings from ring neighbors.
+ */
+export function simulateFreeForAll(
+  entries: FreeForAllInput[],
+  options: { season?: DojoSeason | null } = {},
+): SimulatedFreeForAllResult {
+  const n = entries.length;
+  if (n < 2) {
+    throw new Error("simulateFreeForAll requires at least 2 fighters.");
+  }
+
+  const season = options.season ?? null;
+  const effective = entries.map((e) =>
+    applySeasonModifiers(e.fighter, season),
+  );
+  const moves = entries.map((e) => getMoveById(e.moveId));
+  const luckRolls = effective.map(
+    (eff) => randomInt(1, 100) + eff.luck * 0.35,
+  );
+
+  type Row = {
+    fighter: Fighter;
+    moveId: string;
+    statScore: number;
+    rngRoll: number;
+    rngScore: number;
+    rngBase: number;
+    powerEdge: number;
+    luckSwing: number;
+    strategyEdge: number;
+    moveBonus: number;
+    quoteEdgeContribution: number;
+    techniqueMerit: number;
+  };
+
+  const rows: Row[] = [];
+
+  for (let i = 0; i < n; i += 1) {
+    const eff = effective[i]!;
+    const m = moves[i]!;
+    const statScore = calculateStatScore(eff);
+    const rngPack = applyRNG(statScore);
+    const plSelf = getFighterPowerLevel(eff);
+    let plSumOthers = 0;
+    const luckRollSelf = luckRolls[i]!;
+    let luckSumOthers = 0;
+    let counterOut = 0;
+    let counterIn = 0;
+
+    for (let j = 0; j < n; j += 1) {
+      if (j === i) {
+        continue;
+      }
+      plSumOthers += getFighterPowerLevel(effective[j]!);
+      luckSumOthers += luckRolls[j]!;
+      counterOut += getCounterBonus(m, moves[j]!);
+      counterIn += getCounterBonus(moves[j]!, m);
+    }
+    const denom = n - 1;
+    const meanPlOthers = plSumOthers / denom;
+    const powerEdge = (plSelf - meanPlOthers) * POWER_LEVEL_EDGE_SCALE;
+    const meanLuckOthers = luckSumOthers / denom;
+    const luckSwing = (luckRollSelf - meanLuckOthers) * LUCK_ROLL_SCALE;
+
+    const affinity = getAffinityBonus(eff, m);
+    const strategyEdge = Math.min(
+      affinity + counterOut / denom - (counterIn / denom) * 0.5,
+      STRATEGY_TOTAL_EDGE_CAP,
+    );
+
+    const next = (i + 1) % n;
+    const prev = (i - 1 + n) % n;
+    const qOut = generateQuoteMomentum(m.battlePhrase, moves[next]!.battlePhrase);
+    const qIn = generateQuoteMomentum(moves[prev]!.battlePhrase, m.battlePhrase);
+    const quoteEdgeContribution = qOut.edge - qIn.edge;
+
+    const moveBonus = applyPvpMoveCap(m.finalScoreFlatBonus);
+    const techniqueMerit = strategyEdge + moveBonus;
+
+    rows.push({
+      fighter: entries[i]!.fighter,
+      moveId: entries[i]!.moveId,
+      statScore,
+      rngRoll: rngPack.rngRoll,
+      rngScore: rngPack.rngScore,
+      rngBase: rngPack.finalScore,
+      powerEdge,
+      luckSwing,
+      strategyEdge,
+      moveBonus,
+      quoteEdgeContribution,
+      techniqueMerit,
+    });
+  }
+
+  let placements: FreeForAllPlacement[] = rows.map((r) => {
+    const raw =
+      r.rngBase +
+      r.moveBonus +
+      r.powerEdge +
+      r.luckSwing +
+      r.strategyEdge +
+      r.quoteEdgeContribution;
+    const finalScore = Number(raw.toFixed(2));
+    return {
+      fighter: r.fighter,
+      moveId: r.moveId,
+      finalScore,
+      statScore: r.statScore,
+      rngRoll: r.rngRoll,
+      rngScore: Number(r.rngScore.toFixed(2)),
+      powerEdge: Number(r.powerEdge.toFixed(4)),
+      luckSwing: Number(r.luckSwing.toFixed(4)),
+      strategyEdge: Number(r.strategyEdge.toFixed(4)),
+      moveBonus: Number(r.moveBonus.toFixed(4)),
+      quoteEdgeContribution: Number(r.quoteEdgeContribution.toFixed(4)),
+    };
+  });
+
+  placements.sort((a, b) => b.finalScore - a.finalScore);
+
+  const topScore = placements[0]?.finalScore;
+  const tied = placements.filter((p) => p.finalScore === topScore);
+  let tieBreakCoinFlip = false;
+  let winner: Fighter;
+
+  if (tied.length === 1 && placements[0]) {
+    winner = placements[0].fighter;
+  } else {
+    const tiesRows = tied.map((t) => rows.find((r) => r.fighter.discord_user_id === t.fighter.discord_user_id)!);
+    tiesRows.sort((a, b) => b.statScore - a.statScore);
+    const topStat = tiesRows[0]?.statScore;
+    const statTied = tiesRows.filter((r) => r.statScore === topStat);
+    if (statTied.length === 1 && statTied[0]) {
+      winner = statTied[0].fighter;
+    } else {
+      statTied.sort((a, b) => b.techniqueMerit - a.techniqueMerit);
+      const topTech = statTied[0]?.techniqueMerit;
+      const techTied = statTied.filter((r) => r.techniqueMerit === topTech);
+      if (techTied.length === 1 && techTied[0]) {
+        winner = techTied[0].fighter;
+      } else {
+        winner = techTied[randomInt(0, techTied.length - 1)]!.fighter;
+        tieBreakCoinFlip = true;
+      }
+    }
+  }
+
+  const winnerScore = placements.find(
+    (p) => p.fighter.discord_user_id === winner.discord_user_id,
+  )!.finalScore;
+  const losersPl = placements.filter(
+    (p) => p.fighter.discord_user_id !== winner.discord_user_id,
+  );
+  losersPl.sort((a, b) => b.finalScore - a.finalScore);
+  const runnerUpPlacement = losersPl[0];
+  const runnerUp = runnerUpPlacement?.fighter ?? null;
+  const margin =
+    runnerUpPlacement !== undefined ? winnerScore - runnerUpPlacement.finalScore : 0;
+  const photoFinish = margin <= 2 && margin >= 0 && !tieBreakCoinFlip;
+
+  placements.sort((a, b) => {
+    if (b.finalScore !== a.finalScore) {
+      return b.finalScore - a.finalScore;
+    }
+    const aw = a.fighter.discord_user_id === winner.discord_user_id ? 1 : 0;
+    const bw = b.fighter.discord_user_id === winner.discord_user_id ? 1 : 0;
+    return bw - aw;
+  });
+
+  return {
+    placements,
+    winner,
+    runnerUp,
+    summary: createFreeForAllSummary(winner, n),
+    photoFinish,
+    tieBreakCoinFlip,
+  };
+}
+
 // TODO: Add NFT trait-based stat boosts into pre-battle modifiers.
 // TODO: Add elemental matchup system (fire, water, wind, etc.).
 // TODO: Add critical hit logic as a separate combat event layer.

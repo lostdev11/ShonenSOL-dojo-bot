@@ -265,6 +265,150 @@ export async function updateBattleRecords(
   return undefined;
 }
 
+/** One winner; each other fighter records a loss (free-for-all). */
+export async function updateBattleRecordsFreeForAll(
+  winnerDiscordId: string,
+  loserDiscordIds: string[],
+): Promise<{ winnerWinStreak: number } | undefined> {
+  const winner = await getFighterByDiscordId(winnerDiscordId);
+  if (!winner) {
+    throw new Error("Winner fighter was not found while updating records.");
+  }
+
+  const nextWinnerStreak = (winner.win_streak ?? 0) + 1;
+  const withStreakPayload = {
+    wins: winner.wins + 1,
+    win_streak: nextWinnerStreak,
+    loss_streak: 0,
+  };
+
+  let winnerError = (
+    await supabase
+      .from("dojo_fighters")
+      .update(withStreakPayload)
+      .eq("discord_user_id", winnerDiscordId)
+  ).error;
+
+  if (
+    winnerError &&
+    (winnerError as { code?: string }).code === "PGRST204" &&
+    (String(winnerError.message).includes("win_streak") ||
+      String(winnerError.message).includes("loss_streak"))
+  ) {
+    winnerError = (
+      await supabase
+        .from("dojo_fighters")
+        .update({ wins: winner.wins + 1 })
+        .eq("discord_user_id", winnerDiscordId)
+    ).error;
+  }
+
+  if (winnerError) {
+    throw winnerError;
+  }
+
+  for (const lid of loserDiscordIds) {
+    const loser = await getFighterByDiscordId(lid);
+    if (!loser) {
+      throw new Error(`Loser fighter ${lid} was not found while updating records.`);
+    }
+    const nextLoserStreak = (loser.loss_streak ?? 0) + 1;
+    const loserWithStreakPayload = {
+      losses: loser.losses + 1,
+      loss_streak: nextLoserStreak,
+      win_streak: 0,
+    };
+    let loserError = (
+      await supabase
+        .from("dojo_fighters")
+        .update(loserWithStreakPayload)
+        .eq("discord_user_id", lid)
+    ).error;
+
+    if (
+      loserError &&
+      (loserError as { code?: string }).code === "PGRST204" &&
+      (String(loserError.message).includes("win_streak") ||
+        String(loserError.message).includes("loss_streak"))
+    ) {
+      loserError = (
+        await supabase
+          .from("dojo_fighters")
+          .update({ losses: loser.losses + 1 })
+          .eq("discord_user_id", lid)
+      ).error;
+    }
+
+    if (loserError) {
+      throw loserError;
+    }
+  }
+
+  const w2 = await getFighterByDiscordId(winnerDiscordId);
+  if (w2 && w2.win_streak != null) {
+    return { winnerWinStreak: w2.win_streak };
+  }
+  return undefined;
+}
+
+export type FreeForAllCpAward =
+  | { ok: true; winnerGain: number; loserGainEach: number }
+  | { ok: false; reason: "no_column" | "not_found" };
+
+export async function awardChakraAfterFreeForAll(
+  winnerDiscordId: string,
+  loserDiscordIds: string[],
+): Promise<FreeForAllCpAward> {
+  const w = await getFighterByDiscordId(winnerDiscordId);
+  if (!w) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  const wNext = (w.chakra_points ?? 0) + CHAKRA_POINTS_WIN;
+  const { error: e1 } = await supabase
+    .from("dojo_fighters")
+    .update({ chakra_points: wNext })
+    .eq("discord_user_id", winnerDiscordId);
+
+  if (e1) {
+    if (
+      (e1 as { code?: string }).code === "PGRST204" &&
+      String(e1.message).includes("chakra_points")
+    ) {
+      return { ok: false, reason: "no_column" };
+    }
+    throw e1;
+  }
+
+  for (const lid of loserDiscordIds) {
+    const l = await getFighterByDiscordId(lid);
+    if (!l) {
+      continue;
+    }
+    const lNext = (l.chakra_points ?? 0) + CHAKRA_POINTS_LOSS;
+    const { error: e2 } = await supabase
+      .from("dojo_fighters")
+      .update({ chakra_points: lNext })
+      .eq("discord_user_id", lid);
+
+    if (e2) {
+      if (
+        (e2 as { code?: string }).code === "PGRST204" &&
+        String(e2.message).includes("chakra_points")
+      ) {
+        return { ok: false, reason: "no_column" };
+      }
+      throw e2;
+    }
+  }
+
+  return {
+    ok: true,
+    winnerGain: CHAKRA_POINTS_WIN,
+    loserGainEach: CHAKRA_POINTS_LOSS,
+  };
+}
+
 export type RecentBattleRow = {
   opponentId: string;
   won: boolean;

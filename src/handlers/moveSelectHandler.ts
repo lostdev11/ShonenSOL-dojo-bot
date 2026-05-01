@@ -37,8 +37,8 @@ function buildSelectContent(
     "",
     "🔁 **Reveal:** picks are **simultaneous** — each menu is independent; the fight locks when **both** fighters commit.",
     "",
-    `${hostMention} **(host):** ${hDone ? "✅ locked in" : "⏳ choose"}`,
-    `${oppMention} **(challenger):** ${oDone ? "✅ locked in" : "⏳ choose"}`,
+    `${hostMention} **(Fighter 1):** ${hDone ? "✅ locked in" : "⏳ choose"}`,
+    `${oppMention} **(Fighter 2):** ${oDone ? "✅ locked in" : "⏳ choose"}`,
   ].join("\n");
 }
 
@@ -52,7 +52,7 @@ function makeRows(sessionId: string, hostF: Fighter, oppF: Fighter) {
     .setCustomId(`${MOVE_SELECT_PREFIX}${sessionId}:h`)
     .setMinValues(1)
     .setMaxValues(1)
-    .setPlaceholder("Host: pick a move")
+    .setPlaceholder("Fighter 1: pick a move")
     .addOptions(
       hOpts.map((o) => ({
         label: o.label,
@@ -64,7 +64,7 @@ function makeRows(sessionId: string, hostF: Fighter, oppF: Fighter) {
     .setCustomId(`${MOVE_SELECT_PREFIX}${sessionId}:o`)
     .setMinValues(1)
     .setMaxValues(1)
-    .setPlaceholder("Challenger: pick a move")
+    .setPlaceholder("Fighter 2: pick a move")
     .addOptions(
       oOpts.map((o) => ({
         label: o.label,
@@ -220,7 +220,7 @@ async function runDojoWhenBothReady(
   const mb = getMoveById(moveB);
   try {
     await interaction.update({
-      content: `🔒 **Moves locked!** Host: **${ma.name}** | Challenger: **${mb.name}** — battle in progress…`,
+      content: `🔒 **Moves locked!** Fighter 1: **${ma.name}** | Fighter 2: **${mb.name}** — battle in progress…`,
       components: [],
     });
   } catch (e) {
@@ -268,12 +268,15 @@ export async function handleMoveStringSelect(
     return;
   }
   if (parsed.role === "h" && interaction.user.id !== s.hostId) {
-    await interaction.reply({ content: "Only the **host** can use the host menu.", flags: 64 });
+    await interaction.reply({
+      content: "Only **Fighter 1** in this match can use the left-hand menu.",
+      flags: 64,
+    });
     return;
   }
   if (parsed.role === "o" && interaction.user.id !== s.oppId) {
     await interaction.reply({
-      content: "Only the **challenger in this match** can use the challenger menu.",
+      content: "Only **Fighter 2** in this match can use the right-hand menu.",
       flags: 64,
     });
     return;

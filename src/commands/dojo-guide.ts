@@ -16,7 +16,7 @@ const GUIDE_LINES = [
   "• `/dojo-moves` lists your kit.",
   "",
   "**3 · Battles**",
-  "• `/dojo-battle` (PvP) — lobby → others **Join** → host **Start battle** (pick moves) or **Quick battle** (auto-picks). **PvP** saves wins/losses and battle history.",
+  "• `/dojo-battle` — **Brackets** lobby: random **1v1** pairings (several fights at once); odd count = one sits out. **Free-for-all** lobby: **everyone vs everyone** in one clash (menus capped at **5** fighters; use **FFA · quick** for bigger groups). **PvP** saves wins/losses and CP.",
   "• **Fight CPU** (on the lobby) — test fight; **no** PvP records.",
   "• `/dojo-spar` — private CPU drill; **only you** see it.",
   "• After ranked fights: **Run it back** / **Best of 3** when those buttons appear.",
