@@ -99,7 +99,14 @@ export async function startMoveSelectionPhase(
   hostFighter: Fighter,
   oppFighter: Fighter,
   startInteraction?: ButtonInteraction,
-  extras?: { bo3SessionId?: string },
+  extras?: {
+    bo3SessionId?: string;
+    tournamentFollowUp?: {
+      tournamentId: string;
+      round: number;
+      matchIndex: number;
+    };
+  },
 ): Promise<void> {
   const sessionId = randomBytes(4).toString("hex");
   const rows = makeRows(sessionId, hostFighter, oppFighter);
@@ -110,6 +117,9 @@ export async function startMoveSelectionPhase(
       opponentUsername: challenger.username,
       challenger: hostFighter,
       opponent: oppFighter,
+      ...(extras?.tournamentFollowUp
+        ? { tournamentFollowUp: extras.tournamentFollowUp }
+        : {}),
     });
     return;
   }
@@ -124,6 +134,7 @@ export async function startMoveSelectionPhase(
     moveOpp: null,
     timeout: null,
     bo3SessionId: extras?.bo3SessionId ?? null,
+    tournamentFollowUp: extras?.tournamentFollowUp ?? null,
   };
   p.timeout = setTimeout(() => {
     void onMoveSelectTimeout(sessionId);
@@ -184,6 +195,9 @@ async function onMoveSelectTimeout(sessionId: string) {
       moveAId: a,
       moveBId: b,
       ...(s.bo3SessionId ? { bo3SessionId: s.bo3SessionId } : {}),
+      ...(s.tournamentFollowUp
+        ? { tournamentFollowUp: s.tournamentFollowUp }
+        : {}),
     });
   } catch (e) {
     console.error("battle after move timeout failed:", e);
@@ -239,6 +253,9 @@ async function runDojoWhenBothReady(
       moveAId: moveA,
       moveBId: moveB,
       ...(taken.bo3SessionId ? { bo3SessionId: taken.bo3SessionId } : {}),
+      ...(taken.tournamentFollowUp
+        ? { tournamentFollowUp: taken.tournamentFollowUp }
+        : {}),
     });
   } catch (e) {
     console.error("runDojoWhenBothReady: battle sequence failed:", e);

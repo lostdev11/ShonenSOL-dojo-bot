@@ -8,6 +8,7 @@ import {
   type LobbyJoiner,
   removeJoiner,
   removeLobby,
+  resolveJoinersForBattleStart,
 } from "../lib/lobbyState";
 import { runDojoFreeForAllSequence } from "../lib/runDojoFreeForAllSequence";
 import {
@@ -18,6 +19,7 @@ import { startMoveSelectionPhase } from "./moveSelectHandler";
 import { buildCpuFighter } from "../lib/cpuOpponent";
 import { pickAutoMoveId, pickRandomMoveId, pickRandomMoveIdAvoiding } from "../lib/moves";
 import { runDojoBattleSequence } from "../lib/runDojoBattleSequence";
+import { startTournament } from "../lib/tournamentBracket";
 import { getFighterByDiscordId } from "../lib/supabase";
 import type { Fighter } from "../types";
 
@@ -25,7 +27,7 @@ export const LOBBY_BUTTON_PREFIX = "dojolobby:";
 
 function parseLobbyAction(interaction: ButtonInteraction) {
   const match = interaction.customId.match(
-    /^dojolobby:(join|leave|start|start_auto|ffa_start|ffa_auto|cpu):(.+)$/,
+    /^dojolobby:(join|leave|start|start_auto|ffa_start|ffa_auto|tourney_moves|tourney_quick|cpu):(.+)$/,
   );
   if (!match || !match[1] || !match[2]) {
     return null;
@@ -38,6 +40,8 @@ function parseLobbyAction(interaction: ButtonInteraction) {
       | "start_auto"
       | "ffa_start"
       | "ffa_auto"
+      | "tourney_moves"
+      | "tourney_quick"
       | "cpu",
     lobbyId: match[2],
   };
@@ -75,6 +79,24 @@ export function lobbyButtonRows(lobbyId: string, canStart: boolean, format: Lobb
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!canStart);
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(ffaMoves, ffaQuick);
+    return [row1, row2];
+  }
+
+  if (format === "tournament") {
+    const tourneyMoves = new ButtonBuilder()
+      .setCustomId(`${LOBBY_BUTTON_PREFIX}tourney_moves:${lobbyId}`)
+      .setLabel("Tournament · pick moves")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!canStart);
+    const tourneyQuick = new ButtonBuilder()
+      .setCustomId(`${LOBBY_BUTTON_PREFIX}tourney_quick:${lobbyId}`)
+      .setLabel("Tournament · quick")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!canStart);
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      tourneyMoves,
+      tourneyQuick,
+    );
     return [row1, row2];
   }
 
@@ -120,7 +142,7 @@ async function loadRegisteredLobbyFighters(
   for (const j of joiners) {
     const f = await getFighterByDiscordId(j.id);
     if (f) {
-      fighters.push({ id: j.id, username: j.username, fighter: f });
+      fighters.push({ id: j.id, username: f.username, fighter: f });
     } else {
       skippedJoiners.push(j);
     }
@@ -348,7 +370,7 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
     if (lobby.format !== "bracket") {
       await interaction.reply({
         content:
-          "This lobby is **free-for-all** — use **FFA · pick moves** or **FFA · quick**.",
+          "This lobby isn’t **parallel brackets** — use **FFA** or **Tournament** host buttons for this format.",
         flags: 64,
       });
       return;
@@ -372,7 +394,11 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
     }
     const textChannel = channel as TextChannel;
 
-    const loaded = await loadRegisteredLobbyFighters(interaction.user, lobby.joiners);
+    const joinersForBattle = resolveJoinersForBattleStart(
+      lobby,
+      interaction.message.content,
+    );
+    const loaded = await loadRegisteredLobbyFighters(interaction.user, joinersForBattle);
     if (!loaded.ok) {
       if (loaded.code === "host_unregistered") {
         await interaction.followUp({
@@ -447,17 +473,132 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
       }
     };
 
-    try {
-      await Promise.all(pairs.map(([a, b]) => startOneMatch(a, b)));
-    } catch (err) {
+    const outcomes = await Promise.allSettled(pairs.map(([a, b]) => startOneMatch(a, b)));
+    const failed = outcomes.filter((o) => o.status === "rejected") as PromiseRejectedResult[];
+    if (failed.length > 0) {
       console.error(
         autoMoves ? "runDojoBattleSequence (quick bracket) failed:" : "startMoveSelectionPhase (bracket) failed:",
-        err,
+        failed.map((f) => f.reason),
       );
       await interaction
         .followUp({
           content:
-            "One or more matches failed to start. Check bot permissions (View Channel, Send Messages, Read Message History).",
+            failed.length === pairs.length
+              ? "Matches failed to start. Check bot permissions (View Channel, Send Messages, Read Message History)."
+              : `**${failed.length}** of **${pairs.length}** matches failed to start (likely rate limits or permissions). Others should still be active below.`,
+          flags: 64,
+        })
+        .catch(() => {});
+    }
+  }
+
+  if (action === "tourney_moves" || action === "tourney_quick") {
+    const autoMoves = action === "tourney_quick";
+    const lobby = getLobby(lobbyId);
+    if (!lobby) {
+      await interaction.reply({
+        content: "This lobby is no longer available. Run `/dojo-battle` again.",
+        flags: 64,
+      });
+      return;
+    }
+    if (interaction.user.id !== lobby.hostId) {
+      await interaction.reply({
+        content: "Only the **host** can start the tournament.",
+        flags: 64,
+      });
+      return;
+    }
+    if (lobby.format !== "tournament") {
+      await interaction.reply({
+        content:
+          "This lobby isn’t a **tournament** — use **Brackets** or **FFA** host buttons for this format.",
+        flags: 64,
+      });
+      return;
+    }
+    if (lobby.joiners.length === 0) {
+      await interaction.reply({
+        content: "At least one fighter must **Join** before you can start.",
+        flags: 64,
+      });
+      return;
+    }
+
+    await interaction.deferUpdate();
+    const channel = interaction.channel;
+    if (!channel || !("send" in channel)) {
+      await interaction.followUp({
+        content: "Battles need a server channel where the bot can send messages.",
+        flags: 64,
+      });
+      return;
+    }
+    const textChannel = channel as TextChannel;
+
+    const joinersForBattle = resolveJoinersForBattleStart(
+      lobby,
+      interaction.message.content,
+    );
+    const loaded = await loadRegisteredLobbyFighters(interaction.user, joinersForBattle);
+    if (!loaded.ok) {
+      if (loaded.code === "host_unregistered") {
+        await interaction.followUp({
+          content: "Could not load the host fighter. Make sure the host is registered.",
+          flags: 64,
+        });
+        return;
+      }
+      await interaction.followUp({
+        content:
+          "Need at least **two** registered fighters (host + joiners with `/dojo-register`). Unregistered joiners don’t count.",
+        flags: 64,
+      });
+      return;
+    }
+
+    removeLobby(lobbyId);
+
+    const summaryLines: string[] = [
+      "🏟️ **Tournament running** — single elimination; **Round 1** posts below.",
+      `**Fighters (${loaded.fighters.length}):** ${loaded.fighters.map((f) => `<@${f.id}>`).join(" · ")}`,
+    ];
+    if (loaded.skippedJoiners.length > 0) {
+      summaryLines.push(
+        `⚠️ **Not registered** (skipped): ${loaded.skippedJoiners.map((j) => `<@${j.id}>`).join(", ")}`,
+      );
+    }
+    summaryLines.push("", "_Winners advance each round until one champion._");
+
+    try {
+      await interaction.message.edit({
+        content: summaryLines.join("\n"),
+        components: [],
+      });
+    } catch (e) {
+      console.error("lobby tournament summary edit failed:", e);
+    }
+
+    const slots = loaded.fighters.map((f) => ({
+      id: f.id,
+      username: f.username,
+      fighter: f.fighter,
+    }));
+
+    try {
+      await startTournament(
+        interaction.client,
+        textChannel,
+        interaction.user.id,
+        slots,
+        autoMoves,
+      );
+    } catch (err) {
+      console.error("startTournament failed:", err);
+      await interaction
+        .followUp({
+          content:
+            "Tournament failed to start. Check bot permissions (View Channel, Send Messages, Read Message History).",
           flags: 64,
         })
         .catch(() => {});
@@ -484,7 +625,7 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
     if (lobby.format !== "ffa") {
       await interaction.reply({
         content:
-          "This lobby uses **brackets** — use **Brackets · moves** or **Brackets · quick**.",
+          "This lobby isn’t **FFA** — use **Brackets** or **Tournament** host buttons for this format.",
         flags: 64,
       });
       return;
@@ -508,7 +649,11 @@ export async function handleLobbyButton(interaction: ButtonInteraction): Promise
     }
     const textChannel = channel as TextChannel;
 
-    const loaded = await loadRegisteredLobbyFighters(interaction.user, lobby.joiners);
+    const joinersForBattle = resolveJoinersForBattleStart(
+      lobby,
+      interaction.message.content,
+    );
+    const loaded = await loadRegisteredLobbyFighters(interaction.user, joinersForBattle);
     if (!loaded.ok) {
       if (loaded.code === "host_unregistered") {
         await interaction.followUp({

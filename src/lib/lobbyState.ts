@@ -1,12 +1,14 @@
-// In-memory lobbies: multiple joiners, host must click Start. Single-process only.
+// In-memory lobbies: multiple joiners, host must click Start. For multi-worker setups,
+// `resolveJoinersForBattleStart` merges the live Discord message (who appears under **In the dojo**)
+// with this map so every joiner is included when a match starts.
 
 export type LobbyJoiner = {
   id: string;
   username: string;
 };
 
-/** `bracket` — random 1v1 pairings. `ffa` — everyone in one multi-way fight. */
-export type LobbyFormat = "bracket" | "ffa";
+/** `bracket` — parallel 1v1s. `ffa` — everyone in one clash. `tournament` — single elimination. */
+export type LobbyFormat = "bracket" | "ffa" | "tournament";
 
 export type DojoLobby = {
   hostId: string;
@@ -106,6 +108,42 @@ export function pickRandomOpponent(lobbyId: string): LobbyJoiner | null {
   return lobby.joiners[idx] ?? null;
 }
 
+/**
+ * Discord message content is the cross-process source of truth for who clicked Join:
+ * in-memory `lobby.joiners` only updates on the bot worker that handled each Join button.
+ * When multiple workers/processes serve traffic, merge parsed mentions with memory so every
+ * registered joiner is included when the host starts.
+ */
+export function resolveJoinersForBattleStart(
+  lobby: DojoLobby,
+  messageContent: string,
+): LobbyJoiner[] {
+  const marker = "**In the dojo**";
+  const idx = messageContent.indexOf(marker);
+  if (idx === -1) {
+    return lobby.joiners;
+  }
+  const section = messageContent.slice(idx + marker.length).trim();
+  if (section.includes("_No challengers yet._")) {
+    return [];
+  }
+
+  const parsedIds = [...section.matchAll(/<@(\d+)>/g)].map((m) => m[1]!);
+  const memoryById = new Map(lobby.joiners.map((j) => [j.id, j] as const));
+  const mergedIds = new Set<string>();
+  for (const id of parsedIds) {
+    mergedIds.add(id);
+  }
+  for (const j of lobby.joiners) {
+    mergedIds.add(j.id);
+  }
+
+  return [...mergedIds].map((id) => {
+    const fromMemory = memoryById.get(id);
+    return fromMemory ?? { id, username: "Fighter" };
+  });
+}
+
 export function buildLobbyText(
   hostId: string,
   joiners: LobbyJoiner[],
@@ -126,7 +164,9 @@ export function buildLobbyText(
   const commonHead = [
     format === "ffa"
       ? "⚔️ **ShonenSOL Free-for-all Lobby**"
-      : "⚔️ **ShonenSOL Battle Lobby**",
+      : format === "tournament"
+        ? "🏟️ **ShonenSOL Tournament Lobby**"
+        : "⚔️ **ShonenSOL Battle Lobby**",
     "",
     `**Host** <@${hostId}>`,
     `**Joined:** ${joiners.length}`,
@@ -144,6 +184,19 @@ export function buildLobbyText(
       "• **Everyone vs everyone** — one clash; **one winner**, everyone else logs a loss for ranked stats.",
       "• **FFA · pick moves** — each fighter uses **their menu** (max **5** fighters with menus; use **quick** if you have more).",
       "• **FFA · quick** — **auto strongest unlocked** move per fighter (any lobby size).",
+      "",
+      "**In the dojo**",
+      joinerLines,
+    ].join("\n");
+  }
+
+  if (format === "tournament") {
+    return [
+      ...commonHead,
+      "• Only the **host** can run **Tournament · pick moves** or **Tournament · quick** (enabled once someone joined).",
+      "• **Single elimination** — random seed; **winners advance** each round until one **champion**.",
+      "• **Tournament · pick moves** — pick moves each round. **Tournament · quick** — auto moves every fight.",
+      "• With an **odd** number of fighters, **one random bye** advances without fighting that round.",
       "",
       "**In the dojo**",
       joinerLines,

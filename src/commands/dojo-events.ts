@@ -13,7 +13,7 @@ const command: DojoCommand = {
         "",
         "1. Create a **temporary voice stage** or thread named “Dojo Fight Night”.",
         "2. Ping `@Dojo Fighters` (or your role) **15 minutes** before start.",
-        "3. Host drops **`/dojo-battle`** (brackets or free-for-all mode) — fighters **Join**, host runs **Brackets · moves/quick** or **FFA · moves/quick**.",
+        "3. Host drops **`/dojo-battle`** (brackets, **tournament**, or free-for-all) — fighters **Join**, host runs the matching start buttons (**Brackets** / **Tournament** / **FFA**).",
         "4. Between sets, use **Run it back** or **Best of 3** buttons under results.",
         "5. Snapshot funny battles or clutch finishes for highlights.",
         "",

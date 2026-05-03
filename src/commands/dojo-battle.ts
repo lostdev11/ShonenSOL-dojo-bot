@@ -17,6 +17,7 @@ const command: DojoCommand = {
         .setDescription("Battle mode")
         .addChoices(
           { name: "Lobby · brackets (1v1)", value: "pvp" },
+          { name: "Lobby · tournament (elimination)", value: "tournament" },
           { name: "Lobby · free-for-all", value: "ffa" },
           { name: "CPU (testing)", value: "cpu" },
         ),
@@ -58,7 +59,8 @@ const command: DojoCommand = {
         return;
       }
 
-      const lobbyFormat = mode === "ffa" ? "ffa" : "bracket";
+      const lobbyFormat =
+        mode === "ffa" ? "ffa" : mode === "tournament" ? "tournament" : "bracket";
       const { lobbyId } = createLobby(host.id, lobbyFormat);
 
       await interaction.editReply({

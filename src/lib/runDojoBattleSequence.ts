@@ -201,6 +201,12 @@ export async function runDojoBattleSequence(
     opponentLabel?: string;
     /** Active Best-of-3 series (mid-series rounds). */
     bo3SessionId?: string;
+    /** Single-elimination bracket — advances winner to the next round. */
+    tournamentFollowUp?: {
+      tournamentId: string;
+      round: number;
+      matchIndex: number;
+    };
     /** Slash command interaction — updates use editReply when set (interaction replies). */
     slashInteraction?: ChatInputCommandInteraction;
   },
@@ -216,6 +222,7 @@ export async function runDojoBattleSequence(
     isCpuBattle = false,
     opponentLabel,
     bo3SessionId,
+    tournamentFollowUp,
     slashInteraction,
   } = options;
   const opponentDisplay = opponentLabel ?? `<@${opponentId}>`;
@@ -418,7 +425,7 @@ export async function runDojoBattleSequence(
   ].join("\n");
 
   const showReplayButtons =
-    !isCpuBattle && !bo3MidSeries;
+    !isCpuBattle && !bo3MidSeries && !tournamentFollowUp;
 
   await applyBattleUpdate(message, slashInteraction, {
     content: finalContent,
@@ -431,6 +438,19 @@ export async function runDojoBattleSequence(
     result.awakeningTriggered || result.isPhotoFinish || result.tieBreakCoinFlip;
   if (hypeReact) {
     await message.react("🔥").catch(() => {});
+  }
+
+  if (!isCpuBattle && tournamentFollowUp) {
+    try {
+      const { notifyTournamentMatchResolved } = await import("./tournamentBracket");
+      await notifyTournamentMatchResolved(
+        message.client,
+        tournamentFollowUp,
+        result.winner.discord_user_id,
+      );
+    } catch (e) {
+      console.error("tournament advancement failed:", e);
+    }
   }
 
   if (!isCpuBattle && bo3MidSeries && bo3SessionId) {

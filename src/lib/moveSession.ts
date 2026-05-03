@@ -14,6 +14,12 @@ export type MovePending = {
   timeout: ReturnType<typeof setTimeout> | null;
   /** When set, battle outcome feeds a Best-of-3 series. */
   bo3SessionId?: string | null;
+  /** When set, winner advances in single-elimination tournament. */
+  tournamentFollowUp?: {
+    tournamentId: string;
+    round: number;
+    matchIndex: number;
+  } | null;
 };
 
 const sessions = new Map<string, MovePending>();
